@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "558606073661",
+    "project_id": "smartshell-ad097",
+    "storage_bucket": "smartshell-ad097.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:558606073661:android:2bf394ce9b4b4f8742cf54",
+        "android_client_info": {
+          "package_name": "com.example.turtle_mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAulGpL5DEiScuICjZMTBlyMjLQLcMfbq4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
