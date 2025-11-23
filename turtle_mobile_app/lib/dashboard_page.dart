@@ -1,4 +1,3 @@
-// lib/models/dashboard_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,7 +30,7 @@ class SmartHubTemperaturePage extends StatefulWidget {
 class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
   bool isFanOn = false;
   bool isMisterOn = false;
-  bool isBulbOn = false; // NEW
+  bool isBulbOn = false;
 
   double currentTemp = 0;
   double currentHumidity = 0;
@@ -51,7 +50,6 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
   ];
 
   List<_DataPoint> history = [];
-
   List<FlSpot> get tempSpots =>
       history.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.temp)).toList();
 
@@ -71,6 +69,7 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
     super.dispose();
   }
 
+  // ---------- RTDB helpers (unchanged) ----------
   dynamic _pick(Map m, List<String> keys) {
     for (final k in keys) {
       if (m.containsKey(k)) return m[k];
@@ -100,7 +99,7 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
       final fan = (_pick(ctrls, ['fan', 'Fan']) ?? isFanOn) == true;
       final misterVal = _pick(ctrls, ['mister', 'Mister', 'Humidifier']);
       final mister = (misterVal ?? isMisterOn) == true;
-      final bulb = (_pick(ctrls, ['bulb', 'Bulb', 'light', 'Light']) ?? isBulbOn) == true; // NEW
+      final bulb = (_pick(ctrls, ['bulb', 'Bulb', 'light', 'Light']) ?? isBulbOn) == true;
 
       lastUpdatedMs =
           _pick(m, ['updatedAt', 'UpdatedAt', 'createdAt', 'CreatedAt']) as int?;
@@ -110,7 +109,7 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
         currentHumidity = h;
         isFanOn = fan;
         isMisterOn = mister;
-        isBulbOn = bulb; // NEW
+        isBulbOn = bulb;
       });
     });
   }
@@ -120,7 +119,7 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
     setState(() {
       isFanOn = prefs.getBool('${widget.nestName}_fan') ?? false;
       isMisterOn = prefs.getBool('${widget.nestName}_mister') ?? false;
-      isBulbOn = prefs.getBool('${widget.nestName}_bulb') ?? false; // NEW
+      isBulbOn = prefs.getBool('${widget.nestName}_bulb') ?? false;
     });
   }
 
@@ -135,7 +134,6 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
 
     final base = rtdb.ref('nests/$uid/${widget.nestId}');
     await base.child('controls/$key').set(value);
-    // Write a couple of aliases for compatibility with older data:
     if (key == 'fan') {
       await base.child('Controls/Fan').set(value);
     } else if (key == 'mister') {
@@ -147,206 +145,235 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
     await base.child('updatedAt').set(ServerValue.timestamp);
   }
 
-  void _toggleFan() {
-    final next = !isFanOn;
-    setState(() => isFanOn = next);
-    _saveDeviceState('fan', next);
-    _writeControlToRtdb('fan', next);
-  }
-
-  void _toggleMister() {
-    final next = !isMisterOn;
-    setState(() => isMisterOn = next);
-    _saveDeviceState('mister', next);
-    _writeControlToRtdb('mister', next);
-  }
-
-  void _toggleBulb() { // NEW
-    final next = !isBulbOn;
-    setState(() => isBulbOn = next);
-    _saveDeviceState('bulb', next);
-    _writeControlToRtdb('bulb', next);
-  }
+  void _toggleFan()   { final v = !isFanOn;   setState(()=>isFanOn=v);   _saveDeviceState('fan', v);   _writeControlToRtdb('fan', v); }
+  void _toggleMister(){ final v = !isMisterOn;setState(()=>isMisterOn=v);_saveDeviceState('mister', v);_writeControlToRtdb('mister', v); }
+  void _toggleBulb()  { final v = !isBulbOn;  setState(()=>isBulbOn=v);  _saveDeviceState('bulb', v);  _writeControlToRtdb('bulb', v); }
 
   bool get tempInRange => currentTemp >= 29 && currentTemp <= 32;
   bool get humidityInRange => currentHumidity >= 65 && currentHumidity <= 75;
 
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
-    final textColor = widget.isDarkMode ? Colors.white : Colors.black;
-    final bgColor = widget.isDarkMode ? const Color(0xFF1C1C1E) : const Color(0xFFF9F9FB);
+    final dark = widget.isDarkMode;
+    final colors = _Palette.of(dark);
 
     return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => _nestRef.child('updatedAt').set(ServerValue.timestamp),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.arrow_back, color: widget.isDarkMode ? Colors.white : Colors.black87),
-                          onPressed: () => Navigator.pop(context),
-                          tooltip: 'Back',
-                        ),
-                        Text(widget.nestName,
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: textColor)),
-                      ],
-                    ),
-                    if (lastUpdatedMs != null)
-                      Text(_friendlyUpdated(lastUpdatedMs!),
-                          style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.grey)),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: [
-                    _chip(
-                      tempInRange ? "Temp OK" : "Temp Out of Range",
-                      tempInRange ? (widget.isDarkMode ? Colors.greenAccent : Colors.green.shade100)
-                                   : (widget.isDarkMode ? Colors.redAccent : Colors.red.shade100),
-                      widget.isDarkMode ? Colors.black : Colors.black87,
-                    ),
-                    _chip(
-                      humidityInRange ? "Humidity OK" : "Humidity Out of Range",
-                      humidityInRange ? (widget.isDarkMode ? Colors.greenAccent : Colors.green.shade100)
-                                      : (widget.isDarkMode ? Colors.redAccent : Colors.red.shade100),
-                      widget.isDarkMode ? Colors.black : Colors.black87,
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-                Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 10, end: currentTemp),
-                    duration: const Duration(milliseconds: 900),
-                    builder: (context, animatedTemp, child) {
-                      return SfRadialGauge(
-                        axes: [
-                          RadialAxis(
-                            minimum: 10, maximum: 40, startAngle: 150, endAngle: 30,
-                            showTicks: false, showLabels: true, labelsPosition: ElementsPosition.outside,
-                            axisLabelStyle: GaugeTextStyle(fontSize: 12, color: textColor, fontWeight: FontWeight.bold),
-                            axisLineStyle: const AxisLineStyle(
-                              thickness: 0.2, thicknessUnit: GaugeSizeUnit.factor, cornerStyle: CornerStyle.bothCurve,
-                            ),
-                            ranges: [
-                              GaugeRange(
-                                startValue: 10, endValue: animatedTemp, color: Colors.redAccent,
-                                startWidth: 0.2, endWidth: 0.2, sizeUnit: GaugeSizeUnit.factor,
-                              ),
-                            ],
-                            annotations: [
-                              GaugeAnnotation(
-                                angle: 90, positionFactor: 0.1,
-                                widget: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text("${animatedTemp.toStringAsFixed(1)}°C",
-                                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                                    const SizedBox(height: 4),
-                                    Text("Humidity: ${currentHumidity.toStringAsFixed(0)}%",
-                                        style: TextStyle(fontSize: 12, color: widget.isDarkMode ? Colors.white60 : Colors.grey)),
-                                  ],
-                                ),
-                              )
-                            ],
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-                Text("Temperature Trend",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 160,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(show: false),
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, _) {
-                              const labels = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-                              final i = value.toInt();
-                              return i >= 0 && i < labels.length
-                                  ? Text(labels[i], style: TextStyle(fontSize: 10, color: textColor))
-                                  : const SizedBox.shrink();
-                            },
-                          ),
+      backgroundColor: colors.bg, // gradient behind SafeArea
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors.bgGradient,
+          ),
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            color: colors.accent,
+            onRefresh: () async => _nestRef.child('updatedAt').set(ServerValue.timestamp),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      _roundBtn(
+                        icon: Icons.arrow_back_rounded,
+                        onTap: () => Navigator.pop(context),
+                        bg: colors.card,
+                        fg: colors.onCard.withOpacity(.9),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.nestName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.w700, color: colors.textPrimary),
                         ),
                       ),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: tempSpots,
-                          isCurved: true,
-                          barWidth: 2,
-                          color: Colors.redAccent,
-                          dotData: FlDotData(show: true),
+                      if (lastUpdatedMs != null) ...[
+                        const SizedBox(width: 8),
+                        _chip(
+                          _friendlyUpdated(lastUpdatedMs!),
+                          fg: colors.textSecondary,
+                          bg: colors.card,
+                          dense: true,
+                          icon: Icons.schedule_rounded,
+                        )
+                      ]
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10, runSpacing: 10,
+                    children: [
+                      _chip(
+                        tempInRange ? "Temp OK" : "Temp out of range",
+                        bg: tempInRange ? colors.okBg : colors.warnBg,
+                        fg: tempInRange ? colors.okFg : colors.warnFg,
+                        icon: tempInRange ? Icons.check_circle_rounded : Icons.error_rounded,
+                      ),
+                      _chip(
+                        humidityInRange ? "Humidity OK" : "Humidity out of range",
+                        bg: humidityInRange ? colors.okBg : colors.warnBg,
+                        fg: humidityInRange ? colors.okFg : colors.warnFg,
+                        icon: humidityInRange ? Icons.water_drop_rounded : Icons.water_damage_rounded,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+                  _glassCard(
+                    colors: colors,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 8),
+                        _heroGauge(colors),
+                        const SizedBox(height: 10),
+                        Text(
+                          "Target range: 29–32°C • 65–75%",
+                          style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+                  _glassCard(
+                    colors: colors,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Temperature Trend",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 180,
+                          child: LineChart(
+                            LineChartData(
+                              minY: 10,
+                              maxY: 40,
+                              backgroundColor: Colors.transparent,
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                getDrawingHorizontalLine: (_) => FlLine(
+                                  strokeWidth: 0.4, color: colors.grid),
+                              ),
+                              titlesData: FlTitlesData(
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    reservedSize: 30,
+                                    showTitles: true,
+                                    interval: 5,
+                                    getTitlesWidget: (v, _) => Text(
+                                      v.toInt().toString(),
+                                      style: TextStyle(fontSize: 10, color: colors.textTertiary),
+                                    ),
+                                  ),
+                                ),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    getTitlesWidget: (value, _) {
+                                      const labels = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+                                      final i = value.toInt();
+                                      return i >= 0 && i < labels.length
+                                          ? Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(labels[i],
+                                                  style: TextStyle(fontSize: 10, color: colors.textTertiary)),
+                                            )
+                                          : const SizedBox.shrink();
+                                    },
+                                  ),
+                                ),
+                              ),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: tempSpots,
+                                  isCurved: true,
+                                  barWidth: 3,
+                                  color: colors.accent,
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [colors.accent.withOpacity(.25), Colors.transparent],
+                                    ),
+                                  ),
+                                  dotData: FlDotData(show: true, getDotPainter: (p, d, b, i) {
+                                    return FlDotCirclePainter(radius: 2.8, color: colors.accent, strokeColor: colors.card, strokeWidth: 2);
+                                  }),
+                                ),
+                              ],
+                              borderData: FlBorderData(
+                                show: true,
+                                border: Border.all(width: 0.6, color: colors.border),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 24),
-                Text("Devices", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _deviceCard(
-                      title: "Fan",
-                      icon: Icons.air,
-                      active: isFanOn,
-                      activeColor: Colors.orange,
-                      bgActive: Colors.orangeAccent.withOpacity(0.2),
-                      onTap: _toggleFan,
-                      isDark: widget.isDarkMode,
-                    )),
-                    const SizedBox(width: 16),
-                    Expanded(child: _deviceCard(
-                      title: "Mister",
-                      icon: Icons.water,
-                      active: isMisterOn,
-                      activeColor: Colors.redAccent,
-                      bgActive: Colors.redAccent,
-                      onTap: _toggleMister,
-                      isDark: widget.isDarkMode,
-                      invertOnActive: true,
-                    )),
-                    const SizedBox(width: 16),
-                    Expanded(child: _deviceCard( // NEW Bulb
-                      title: "Bulb",
-                      icon: Icons.lightbulb_outline,
-                      active: isBulbOn,
-                      activeColor: Colors.amber.shade700,
-                      bgActive: Colors.amber.shade200,
-                      onTap: _toggleBulb,
-                      isDark: widget.isDarkMode,
-                    )),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Text("Devices",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _deviceToggle(
+                          title: "Fan",
+                          icon: Icons.air_rounded,
+                          on: isFanOn,
+                          onTap: _toggleFan,
+                          colors: colors,
+                          activeColor: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _deviceToggle(
+                          title: "Mister",
+                          icon: Icons.water_drop_rounded,
+                          on: isMisterOn,
+                          onTap: _toggleMister,
+                          colors: colors,
+                          activeColor: Colors.pinkAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _deviceToggle(
+                          title: "Bulb",
+                          icon: Icons.lightbulb_rounded,
+                          on: isBulbOn,
+                          onTap: _toggleBulb,
+                          colors: colors,
+                          activeColor: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -354,48 +381,172 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
     );
   }
 
-  Widget _deviceCard({
+  // ---------- Pieces ----------
+
+  Widget _heroGauge(_Palette colors) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 10, end: currentTemp),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return SizedBox(
+          height: 260,
+          child: SfRadialGauge(
+            axes: [
+              RadialAxis(
+                minimum: 10, maximum: 40, startAngle: 150, endAngle: 30,
+                showTicks: false,
+                interval: 5,
+                axisLabelStyle: GaugeTextStyle(
+                    fontSize: 11, color: colors.textTertiary, fontWeight: FontWeight.w600),
+                axisLineStyle: AxisLineStyle(
+                  thickness: 0.18,
+                  thicknessUnit: GaugeSizeUnit.factor,
+                  color: colors.card,
+                  cornerStyle: CornerStyle.bothCurve,
+                ),
+                ranges: [
+                  GaugeRange(
+                    startValue: 10, endValue: value,
+                    startWidth: 0.18, endWidth: 0.18, sizeUnit: GaugeSizeUnit.factor,
+                    gradient: SweepGradient(colors: [colors.accent, colors.accent2]),
+                  ),
+                ],
+                annotations: [
+                  GaugeAnnotation(
+                    angle: 90,
+                    positionFactor: 0.05,
+                    widget: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text("${value.toStringAsFixed(1)}°C",
+                            style: TextStyle(
+                              fontSize: 28, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+                        const SizedBox(height: 6),
+                        _smallHumidityRing(colors),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _smallHumidityRing(_Palette colors) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.water_drop, size: 16, color: colors.accent2),
+          const SizedBox(width: 6),
+          Text("${currentHumidity.toStringAsFixed(0)}%",
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _deviceToggle({
     required String title,
     required IconData icon,
-    required bool active,
-    required Color activeColor,
-    required Color bgActive,
+    required bool on,
     required VoidCallback onTap,
-    required bool isDark,
-    bool invertOnActive = false,
+    required _Palette colors,
+    required Color activeColor,
   }) {
-    final bg = active ? bgActive : (isDark ? Colors.grey[850]! : Colors.white);
-    final fg = active
-        ? (invertOnActive ? Colors.white : activeColor)
-        : (invertOnActive ? Colors.redAccent : (isDark ? Colors.white : Colors.black87));
+    final bgOn  = colors.accent.withOpacity(.12);
+    final fgOn  = activeColor;
+    final bgOff = colors.card;
+    final fgOff = colors.onCard;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: on ? bgOn : bgOff,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border, width: 0.8),
+        boxShadow: [BoxShadow(
+          color: Colors.black.withOpacity(colors.isDark ? 0.25 : 0.06),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
+        )],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: fg, size: 28),
-            const SizedBox(height: 8),
-            Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: fg)),
-            Text("Tap to ${active ? "turn off" : "turn on"}",
-                style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.grey)),
+            Icon(icon, size: 28, color: on ? fgOn : fgOff),
+            const SizedBox(height: 10),
+            Text(title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: on ? fgOn : colors.textPrimary)),
+            const SizedBox(height: 2),
+            Text(on ? "Tap to turn off" : "Tap to turn on",
+                style: TextStyle(fontSize: 11, color: colors.textSecondary)),
           ],
         ),
       ),
     );
   }
 
-  Widget _chip(String label, Color bg, Color fg) {
+  Widget _roundBtn({required IconData icon, required VoidCallback onTap, required Color bg, required Color fg}) {
+    return Material(
+      color: bg, borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Icon(icon, color: fg, size: 22),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String text, {required Color bg, required Color fg, IconData? icon, bool dense = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Text(label, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
+      padding: EdgeInsets.symmetric(horizontal: dense ? 10 : 12, vertical: dense ? 6 : 8),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: bg.withOpacity(.3))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 6),
+        ],
+        Text(text, style: TextStyle(fontSize: dense ? 11 : 12, fontWeight: FontWeight.w700, color: fg)),
+      ]),
+    );
+  }
+
+  Widget _glassCard({required _Palette colors, required Widget child, EdgeInsetsGeometry? padding}) {
+    return Container(
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colors.border, width: 0.9),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(colors.isDark ? .35 : .08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -407,6 +558,85 @@ class _SmartHubTemperaturePageState extends State<SmartHubTemperaturePage> {
     if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
     if (diff.inHours < 24) return "${diff.inHours}h ago";
     return "${dt.year}-${dt.month.toString().padLeft(2,'0')}-${dt.day.toString().padLeft(2,'0')}";
+  }
+}
+
+// ---------- Theme palette ----------
+
+class _Palette {
+  final bool isDark;
+  final Color bg;
+  final List<Color> bgGradient;
+  final Color card;
+  final Color onCard;
+  final Color border;
+  final Color grid;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textTertiary;
+  final Color accent;
+  final Color accent2;
+  final Color okBg, okFg, warnBg, warnFg;
+
+  _Palette._({
+    required this.isDark,
+    required this.bg,
+    required this.bgGradient,
+    required this.card,
+    required this.onCard,
+    required this.border,
+    required this.grid,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textTertiary,
+    required this.accent,
+    required this.accent2,
+    required this.okBg,
+    required this.okFg,
+    required this.warnBg,
+    required this.warnFg,
+  });
+
+  static _Palette of(bool dark) {
+    if (dark) {
+      return _Palette._(
+        isDark: true,
+        bg: const Color(0xFF0E0F12),
+        bgGradient: const [Color(0xFF0E0F12), Color(0xFF12141A)],
+        card: const Color(0xFF1B1E24),
+        onCard: const Color(0xFFEDEDED),
+        border: const Color(0xFF2A2E36),
+        grid: const Color(0xFF2B2F38),
+        textPrimary: Colors.white,
+        textSecondary: Colors.white70,
+        textTertiary: Colors.white54,
+        accent: const Color(0xFF7C7BFF),
+        accent2: const Color(0xFF5AE0FF),
+        okBg: const Color(0xFF153D2A),
+        okFg: const Color(0xFF6BFFB0),
+        warnBg: const Color(0xFF3C1A1E),
+        warnFg: const Color(0xFFFF8A8A),
+      );
+    } else {
+      return _Palette._(
+        isDark: false,
+        bg: const Color(0xFFF5F7FA),
+        bgGradient: const [Color(0xFFF5F7FA), Color(0xFFF2F4F8)],
+        card: Colors.white,
+        onCard: const Color(0xFF232B3A),
+        border: const Color(0xFFE8EDF5),
+        grid: const Color(0xFFE8EDF5),
+        textPrimary: const Color(0xFF1E2430),
+        textSecondary: const Color(0xFF6B7280),
+        textTertiary: const Color(0xFF9CA3AF),
+        accent: const Color(0xFF6D5DF6),
+        accent2: const Color(0xFF22C1DC),
+        okBg: const Color(0xFFE7FFF4),
+        okFg: const Color(0xFF0B8F5A),
+        warnBg: const Color(0xFFFFEEF0),
+        warnFg: const Color(0xFFD63A48),
+      );
+    }
   }
 }
 

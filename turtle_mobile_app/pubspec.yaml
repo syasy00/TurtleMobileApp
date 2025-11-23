@@ -43,6 +43,7 @@ dependencies:
   firebase_auth: ^4.18.0
   cloud_firestore: ^4.9.0
   firebase_database: ^10.4.5
+  flutter_local_notifications: ^17.2.3 
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -72,6 +73,9 @@ flutter:
   - assets/smart_shell_logo.png
   - assets/corner_bottom.png
   - assets/corner_top.png
+  - assets/turtle_batik.png
+  
+
   
    # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
