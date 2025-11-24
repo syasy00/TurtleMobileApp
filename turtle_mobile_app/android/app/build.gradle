@@ -1,11 +1,7 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-
-    // ✅ FlutterFire plugin for Firebase
     id 'com.google.gms.google-services'
-
-    // ✅ Flutter Gradle plugin (must come last)
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -16,36 +12,43 @@ android {
 
     defaultConfig {
         applicationId = "com.example.turtle_mobile_app"
-        minSdkVersion = flutter.minSdkVersion // ✅ minimum required for Firebase Messaging
+        minSdkVersion = flutter.minSdkVersion
         targetSdkVersion = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        debug {
-            storeFile file("${rootDir}/../debug.keystore")
-        }
-    }
+    // ✅ REMOVED: Custom signingConfigs block.
+    // Gradle will now automatically use the default debug keystore.
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            // Use default debug key for release testing to avoid errors
+            signingConfig signingConfigs.debug
             shrinkResources false
             minifyEnabled false
         }
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        // ✅ UPDATED: Use Java 17 to fix "obsolete" warnings
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
+        // ✅ UPDATED: Use Java 17
+        jvmTarget = JavaVersion.VERSION_17
     }
 }
 
 flutter {
     source = "../.."
 }
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+}
+
+apply plugin: 'com.google.gms.google-services'

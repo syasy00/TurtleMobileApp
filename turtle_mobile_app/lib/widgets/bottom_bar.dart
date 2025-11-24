@@ -1,4 +1,9 @@
+// lib/widgets/bottom_bar.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+
+import '../core/db.dart'; // 👈 add this
 import '../theme/ app_colors.dart';
 
 class FancyItem {
@@ -23,14 +28,10 @@ class FancyBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // OUTER padding around the whole pill
     const outerPad = EdgeInsets.fromLTRB(16, 4, 16, 12);
-
-    // INNER padding inside the pill
     const double pillHPad = 18.0;
     const double pillVPadTop = 14.0;
     const double pillVPadBottom = 14.0;
-
     const double indicatorWidth = 46.0;
     const double indicatorHeight = 4.0;
 
@@ -57,7 +58,7 @@ class FancyBottomBar extends StatelessWidget {
               return Stack(
                 alignment: Alignment.bottomCenter,
                 children: [
-                  // Pill background + icons/labels
+                  // pill background
                   Container(
                     decoration: BoxDecoration(
                       color: bg,
@@ -76,6 +77,85 @@ class FancyBottomBar extends StatelessWidget {
                       children: List.generate(items.length, (i) {
                         final it = items[i];
                         final active = i == currentIndex;
+
+                        final labelLower = it.label.toLowerCase();
+                        final isNotificationItem =
+                            labelLower.contains("alert") ||
+                                labelLower.contains("notif");
+
+                        Widget iconWidget = Icon(
+                          it.icon,
+                          color: active ? AppColors.primary : iconIdle,
+                        );
+
+                        if (isNotificationItem) {
+                          final uid = FirebaseAuth.instance.currentUser?.uid;
+                          if (uid != null) {
+                            iconWidget = StreamBuilder<DatabaseEvent>(
+                              stream: rtdb // 👈 use rtdb
+                                  .ref('alerts/$uid')
+                                  .limitToLast(10)
+                                  .onValue,
+                              builder: (context, snapshot) {
+                                bool hasUnread = false;
+
+                                if (snapshot.hasData &&
+                                    snapshot.data!.snapshot.value != null) {
+                                  final data = snapshot.data!.snapshot.value;
+
+                                  try {
+                                    if (data is Map) {
+                                      for (final v in data.values) {
+                                        if (v is Map && v['read'] == false) {
+                                          hasUnread = true;
+                                          break;
+                                        }
+                                      }
+                                    } else if (data is List) {
+                                      for (final v in data) {
+                                        if (v is Map && v['read'] == false) {
+                                          hasUnread = true;
+                                          break;
+                                        }
+                                      }
+                                    }
+                                  } catch (e) {
+                                    print("Error parsing badge data: $e");
+                                  }
+                                }
+
+                                return Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      it.icon,
+                                      color:
+                                          active ? AppColors.primary : iconIdle,
+                                    ),
+                                    if (hasUnread)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: bg,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            );
+                          }
+                        }
+
                         return Expanded(
                           child: InkWell(
                             borderRadius: BorderRadius.circular(18),
@@ -83,21 +163,15 @@ class FancyBottomBar extends StatelessWidget {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  it.icon,
-                                  color: active
-                                      ? AppColors.primary
-                                      : iconIdle,
-                                ),
+                                iconWidget,
                                 const SizedBox(height: 6),
                                 Text(
-                                  it.label.isEmpty ? " " : it.label,
+                                  it.label,
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: active
-                                        ? AppColors.primary
-                                        : textIdle,
+                                    color:
+                                        active ? AppColors.primary : textIdle,
                                   ),
                                 ),
                               ],
@@ -108,11 +182,13 @@ class FancyBottomBar extends StatelessWidget {
                     ),
                   ),
 
-                  // Blue indicator
+                  // indicator
                   Positioned(
                     top: 0,
                     left: indicatorLeft.clamp(
-                        pillHPad, outerWidth - pillHPad - indicatorWidth),
+                      pillHPad,
+                      outerWidth - pillHPad - indicatorWidth,
+                    ),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOut,
@@ -121,20 +197,6 @@ class FancyBottomBar extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-
-                  // Bottom track (decorative)
-                  Positioned(
-                    bottom: 8,
-                    child: Container(
-                      width: 140,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color:
-                            isDark ? Colors.white12 : AppColors.gray200,
-                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                   ),
